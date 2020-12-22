@@ -509,7 +509,7 @@ redraw_graph (NetspeedApplet *netspeed,
     w = gdk_window_get_width (real_window);
     h = gdk_window_get_height (real_window);
 
-    /* the graph hight should be: hight/2 <= applet->max_graph < hight */
+    /* the graph hight should be: hight/2 <= netspeed->max_graph < hight */
     for (max_val = 1; max_val < netspeed->max_graph; max_val *= 2) ;
 
     /* calculate the polygons (GdkPoint[]) for the graphs */
@@ -675,13 +675,6 @@ format_ipv4 (guint32  ip,
              char    *dest)
 {
     inet_ntop (AF_INET, &ip, dest, INET_ADDRSTRLEN);
-}
-
-static void
-format_ipv6 (const guint8  ip[16],
-             char         *dest)
-{
-    inet_ntop (AF_INET6, ip, dest, INET6_ADDRSTRLEN);
 }
 
 static void
@@ -1534,54 +1527,39 @@ update_tooltip (NetspeedApplet *netspeed)
     if (!netspeed->devinfo->running)
         g_string_printf (tooltip, _("%s is down"), netspeed->devinfo->name);
     else {
-        char ipv4_text [INET_ADDRSTRLEN];
-        char ipv6_text [INET6_ADDRSTRLEN];
-        char *ip;
+        GSList *iterator;
+        GString *string = NULL;
 
-        if (netspeed->show_all_addresses) {
-            format_ipv6 (netspeed->devinfo->ipv6, ipv6_text);
-            if (netspeed->devinfo->ip) {
-                format_ipv4 (netspeed->devinfo->ip, ipv4_text);
-                if (strlen (ipv6_text) > 2) {
-                    g_string_printf (tooltip,
-                                     _("%s: %s and %s"),
-                                     netspeed->devinfo->name,
-                                     ipv4_text,
-                                     ipv6_text);
-                } else {
-                    g_string_printf (tooltip,
-                                     _("%s: %s"),
-                                     netspeed->devinfo->name,
-                                     ipv4_text);
-                }
-            } else {
-                if (strlen (ipv6_text) > 2) {
+        GSList *ip_address_list = get_simple_ip_address_list (netspeed->devinfo->name,
+                                                              netspeed->show_all_addresses);
+
+        /* check if we got an ip address */
+        if (ip_address_list != NULL) {
+            for (iterator = ip_address_list; iterator; iterator = iterator->next) {
+                if (string == NULL)
+                    string = g_string_new ((char*) iterator->data);
+                else
+                    g_string_append_printf (string, "\n%s", (char*) iterator->data);
+            }
+
+            if (string != NULL) {
+                if (netspeed->devinfo->ip) {
                     g_string_printf (tooltip,
                                      _("%s: %s"),
-                                     netspeed->devinfo->name,
-                                     ipv6_text);
+                                     netspeed->devinfo->name, string->str);
                 } else {
                     g_string_printf (tooltip,
-                                     _("%s: has no ip"),
-                                     netspeed->devinfo->name);
+                                     _("%s: \n%s"),
+                                     netspeed->devinfo->name, string->str);
                 }
             }
+
+            g_string_free (string, TRUE);
+            g_slist_free_full (ip_address_list, g_free);
         } else {
-            if (netspeed->devinfo->ip) {
-                format_ipv4 (netspeed->devinfo->ip, ipv4_text);
-                ip = ipv4_text;
-            } else {
-                format_ipv6 (netspeed->devinfo->ipv6, ipv6_text);
-                if (strlen (ipv6_text) > 2) {
-                    ip = ipv6_text;
-                } else {
-                    ip = _("has no ip");
-                }
-            }
             g_string_printf (tooltip,
-                             _("%s: %s"),
-                             netspeed->devinfo->name,
-                             ip);
+                             _("%s: has no ip"),
+                             netspeed->devinfo->name);
         }
 
         if (netspeed->show_sum) {
